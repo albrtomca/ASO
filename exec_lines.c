@@ -18,6 +18,10 @@
 #define LINE_MIN 16
 #define LINE_MAX 1024
 
+int procesar_linea(char *linea)
+{
+    return 0;    
+}
 
 int main(int argc, char **argv)
 {
@@ -79,6 +83,8 @@ int main(int argc, char **argv)
 
     ssize_t num_leidos;
     ssize_t offset = 0; //Controlar los saltos de línea y guardar la siguiente instrucción si se evalua en la iteración anterior
+    
+    char *resto;
 
     //Si de una pasada leemos una instrucción, salto de línea y parte de la siguiente instrucción, esa segunda parte se guarda en el offset
     //La segunda condición sirve para que si de una pasada leemos la línea completa pero incluye varias instrucciones, también se traten 
@@ -94,8 +100,8 @@ int main(int argc, char **argv)
         buffer[offset + num_leidos] = '\0'; //preguntar si eso esta bien
 
         //Trozeamos la entrada para obtener la primera instrucción el resto, que se encontrará después del salto de línea \n
-        char *linea = strtok(buffer, "\n");
-        char *resto = strtok(NULL, "");
+        char *linea = strtok_r(buffer, "\n", &resto);
+        //char *resto = strtok(NULL, "");
 
         printf("Numero de bytes leidos: %ld\n", num_leidos);
         printf("Buffer: %s\n", buffer);
@@ -104,7 +110,7 @@ int main(int argc, char **argv)
         while (linea != NULL) 
         {
             printf("Linea: %s\n", linea);   
-            linea = strtok(NULL, "\n"); 
+            linea = strtok_r(NULL, "\n", &resto); 
         }
         //printf("Linea: %s\n", linea);
 
@@ -127,54 +133,6 @@ int main(int argc, char **argv)
         
     } 
     
-
-
-
-
-
-    // ssize_t bytes_leidos;
-    // //buffer[buf_size + 1]; // Espacio adicional para el terminador nulo
-    // buffer[0] = '\0';          // Inicia el buffer vacío
-    // size_t offset = 0;         // Inicio para la siguiente lectura
-
-    // while ((bytes_leidos = read(STDIN_FILENO, buffer + offset, buf_size - offset)) > 0) {
-    //     if (bytes_leidos == -1) {
-    //         perror("read()");
-    //         exit(EXIT_FAILURE);
-    //     }
-
-    //     // Agregar el terminador nulo al final de los datos leídos
-    //     buffer[offset + bytes_leidos] = '\0';
-
-    //     // Procesar el contenido del buffer
-    //     char *linea = strtok(buffer, "\n");
-    //     char *resto = strtok(NULL, "");
-
-    //     while (linea != NULL) {
-    //         printf("Linea: %s\n", linea);
-    //         linea = strtok(NULL, "\n");
-    //     }
-
-    //     // Mover el resto al inicio del buffer para la siguiente iteración
-    //     if (resto != NULL) {
-    //         offset = strlen(resto);
-    //         memmove(buffer, resto, offset);
-    //     } else {
-    //         offset = 0;  // No hay resto, comenzamos desde el inicio
-    //     }
-
-    //     printf("Numero de bytes leidos: %ld\n", bytes_leidos);
-    //     printf("Buffer para la siguiente iteración: %s\n", buffer);
-    // }
-
-    // if (bytes_leidos == -1) {
-    //     perror("read()");
-    //     exit(EXIT_FAILURE);
-    // }
-
-
-
-
     free(buffer);
     exit(EXIT_SUCCESS);
 }
