@@ -1,0 +1,4 @@
+EEEEEEEEEEEEEEEEEEEEEEPAAAAAAAAAAAAAAAAAA
+
+Hay que caputar el codigo de error ya que no será el mismo error el que da la ejecución de un ls que de un kill, véase que con el ls el código de error será 1 y kill será 9.
+
