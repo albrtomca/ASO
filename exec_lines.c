@@ -19,28 +19,128 @@
 #define LINE_MIN 16
 #define LINE_MAX 1024
 
-// int procesar_linea(char *linea)
-// {
-//     return 0;    
-// }
+typedef enum {NADA, REDIR_IZQ, REDIR_DCHA, REDIR2, TUBERIA} operador_enum;
 
-void ejecutar_comando(char *linea)
+void redireccion_doble(char *lado_izq,char *lado_dcho)
 {
-    //char *lineaFinal = strtok(linea, "\n ");
-    printf("Linea: %s\n", linea);
+
 }
 
+void redireccion_izq(char *lado_izq,char *lado_dcho)
+{
+    
+}
 
+void redireccion_dcha(char *lado_izq,char *lado_dcho)
+{
+    int fd; //Descriptor de fichero
+    switch(fork())
+    {
+        case -1: //error
+            perror("fork()");
+            exit(EXIT_FAILURE);
+            break;
+        case 0: //ejecucion proceso hijo
+            if(close(STDOUT_FILENO) == -1)
+            {
+                perror("close(STDOUT_FILENO)");
+                exit(EXIT_FAILURE);
+            }
+            if((fd = open(lado_dcho, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU)) == -1)
+            {
+                perror("open(fd)");
+                exit(EXIT_FAILURE);
+            }
+            
+            char *arg[] = {lado_izq, NULL};
+            
+            for (int i = 0; arg[i] != NULL; i++) {
+                printf("arg[%d]: %s\n", i, arg[i]);
+            }
+            
+            char *comando = strtok(lado_izq, " ");
+            execvp(comando, arg);
+            perror("exec()");
+            exit(EXIT_FAILURE);
+            break;
+
+        default: //ejecucion proceso padre (espera al hijo)
+            if(wait(NULL) == -1)
+            {
+                perror("wait()");
+                exit(EXIT_FAILURE);
+            } 
+            break;
+
+    }
+}
+
+void tuberia(char *lado_izq,char *lado_dcho)
+{
+    
+}
+
+void procesar_linea(char *linea)
+{
+    char *lado_izq, *operador, *lado_dcho = NULL;
+    operador_enum enum_op = NADA;
+
+    if(strstr(linea,">>") != NULL)
+    {
+        operador = ">>";
+        enum_op = REDIR2;
+    }
+     else if(strchr(linea,'>') != NULL) 
+    {
+        operador = ">";
+        enum_op = REDIR_DCHA;
+    }
+     else if(strchr(linea,'<') != NULL) 
+    {
+        operador = "<";
+        enum_op = REDIR_IZQ;
+    }
+     else if(strchr(linea,'|') != NULL) 
+    {
+        operador = "|";
+        enum_op = TUBERIA;
+    }
+
+    if(operador != NULL)
+    {
+        lado_izq = strtok(linea,operador);
+        lado_dcho = strtok(NULL,operador);
+    }
+
+    switch(enum_op)
+    {
+        case REDIR2:
+            redireccion_doble(lado_izq,lado_dcho);
+            break;
+        case REDIR_DCHA:
+            redireccion_dcha(lado_izq,lado_dcho);
+            break;
+        case REDIR_IZQ:
+            redireccion_izq(lado_izq,lado_dcho);
+            break;
+        case TUBERIA:
+            tuberia(lado_izq,lado_dcho);
+            break;
+        default:
+            printf("sin operador\n");
+            break;
+    }
+
+}
 
 int main(int argc, char **argv)
 {
     pid_t pid; /* Usado en el proceso padre para guardar el PID del proceso hijo */
-    int fd; //Descriptor de fichero
     int opt;
     int buf_size = BUF_SIZE_DEF, max_line_size = MAX_LINE_SIZE_DEF;
 
     char *buffer;
-    char *buffer_linea;
+    char *linea;
     
     optind = 1;
     
@@ -72,7 +172,6 @@ int main(int argc, char **argv)
         }
     }
 
-    
     if(buf_size < BUF_MIN || buf_size > BUF_MAX)
     {
         fprintf(stderr, "Error: El tamaño de buffer tiene que estar entre 1 y 8192.\n");
@@ -90,17 +189,15 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-
-    if ((buffer_linea = (char *) malloc(max_line_size * sizeof(char))) == NULL)
+    if ((linea = (char *) malloc(max_line_size * sizeof(char))) == NULL)
     {
-        perror("malloc(buffer_linea)");
+        perror("malloc(linea)");
         exit(EXIT_FAILURE);
     }
 
-
     ssize_t num_leidos;
     int indice_linea = 0;
-    int indice_linea_error = 1;
+    int num_linea_error = 1;
     bool controlador_error = false;
 
     //Leemos de la entrada estandar 
@@ -113,34 +210,32 @@ int main(int argc, char **argv)
             if(indice_linea == max_line_size)
             {
                 //De ser así, imprimimos un mensaje de error y hacemos tratamiento de datos
-                fprintf(stderr, "Error, línea %d demasiado larga: %s \n", indice_linea_error, buffer_linea);
-                indice_linea_error++;
-                memset(buffer_linea, 0, max_line_size);
+                fprintf(stderr, "Error, línea %d demasiado larga: %s \n", num_linea_error, linea);
+                num_linea_error++;
+                memset(linea, 0, max_line_size);
                 indice_linea = 0;
                 controlador_error = true;
-                //exit(EXIT_FAILURE);
-                //continue;
             }
 
             //Si no ha alcanzado el límite, añadimos el dato leido a un buffer de datos leidos
-            printf("Contenido del buffer de linea: %s\n", buffer_linea);
-            buffer_linea[indice_linea] = buffer[i];
+            //printf("Contenido del buffer de linea: %s\n", linea);
+            linea[indice_linea] = buffer[i];
             if(buffer[i] == '\n')
             {
-                printf("Contenido Antes de ejecucion: %s\n", buffer_linea);
+                //printf("Contenido Antes de ejecucion: %s\n", linea);
                 
                 //Aqui se trata el resto de la linea cuando ha pasado por el condicionante de error
                 if(controlador_error == true)
                 {
                     controlador_error = false;
-                }else //Si no ha pasado por el error, ejecutamos la linea
-                {
-                    ejecutar_comando(buffer_linea);
-                    indice_linea_error++;
+                }
+                 else {//Si no ha pasado por el error, ejecutamos la linea
+                    procesar_linea(linea);
+                    num_linea_error++;
                 }
                 //Reseteamos valores
                 indice_linea = 0;
-                memset(buffer_linea, 0, max_line_size);
+                memset(linea, 0, max_line_size);
             }
             else {
                 indice_linea++;
@@ -205,5 +300,6 @@ int main(int argc, char **argv)
     // } 
     
     free(buffer);
+    free(linea);
     exit(EXIT_SUCCESS);
 }
