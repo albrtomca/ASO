@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <stdbool.h>
 
 #define BUF_SIZE_DEF 16
 #define MAX_LINE_SIZE_DEF 32
@@ -18,10 +19,18 @@
 #define LINE_MIN 16
 #define LINE_MAX 1024
 
-int procesar_linea(char *linea)
+// int procesar_linea(char *linea)
+// {
+//     return 0;    
+// }
+
+void ejecutar_comando(char *linea)
 {
-    return 0;    
+    //char *lineaFinal = strtok(linea, "\n ");
+    printf("Linea: %s\n", linea);
 }
+
+
 
 int main(int argc, char **argv)
 {
@@ -31,6 +40,7 @@ int main(int argc, char **argv)
     int buf_size = BUF_SIZE_DEF, max_line_size = MAX_LINE_SIZE_DEF;
 
     char *buffer;
+    char *buffer_linea;
     
     optind = 1;
     
@@ -76,62 +86,123 @@ int main(int argc, char **argv)
     //Guardamos memoria para el buffer
     if ((buffer = (char *) malloc(buf_size * sizeof(char))) == NULL)
     {
-        perror("malloc()");
+        perror("malloc(buffer)");
+        exit(EXIT_FAILURE);
+    }
+
+
+    if ((buffer_linea = (char *) malloc(max_line_size * sizeof(char))) == NULL)
+    {
+        perror("malloc(buffer_linea)");
         exit(EXIT_FAILURE);
     }
 
 
     ssize_t num_leidos;
-    ssize_t offset = 0; //Controlar los saltos de línea y guardar la siguiente instrucción si se evalua en la iteración anterior
-    
-    char *resto;
+    int indice_linea = 0;
+    int indice_linea_error = 1;
+    bool controlador_error = false;
 
-    //Si de una pasada leemos una instrucción, salto de línea y parte de la siguiente instrucción, esa segunda parte se guarda en el offset
-    //La segunda condición sirve para que si de una pasada leemos la línea completa pero incluye varias instrucciones, también se traten 
-    while((num_leidos = read(STDIN_FILENO, buffer + offset, buf_size - offset)) > 0 || offset != 0)
+    //Leemos de la entrada estandar 
+    while((num_leidos = read(STDIN_FILENO, buffer, buf_size)) > 0)
     {
-        if(num_leidos == -1)
+        //De los datos que vamos leyendo
+        for(int i = 0; i < num_leidos; i++)
         {
-            perror("read()");
-            exit(EXIT_FAILURE);
+            //Comprobamos que no haya alcanzado el maximo de línea permitido
+            if(indice_linea == max_line_size)
+            {
+                //De ser así, imprimimos un mensaje de error y hacemos tratamiento de datos
+                fprintf(stderr, "Error, línea %d demasiado larga: %s \n", indice_linea_error, buffer_linea);
+                indice_linea_error++;
+                memset(buffer_linea, 0, max_line_size);
+                indice_linea = 0;
+                controlador_error = true;
+                //exit(EXIT_FAILURE);
+                //continue;
+            }
+
+            //Si no ha alcanzado el límite, añadimos el dato leido a un buffer de datos leidos
+            printf("Contenido del buffer de linea: %s\n", buffer_linea);
+            buffer_linea[indice_linea] = buffer[i];
+            if(buffer[i] == '\n')
+            {
+                printf("Contenido Antes de ejecucion: %s\n", buffer_linea);
+                
+                //Aqui se trata el resto de la linea cuando ha pasado por el condicionante de error
+                if(controlador_error == true)
+                {
+                    controlador_error = false;
+                }else //Si no ha pasado por el error, ejecutamos la linea
+                {
+                    ejecutar_comando(buffer_linea);
+                    indice_linea_error++;
+                }
+                //Reseteamos valores
+                indice_linea = 0;
+                memset(buffer_linea, 0, max_line_size);
+            }
+            else {
+                indice_linea++;
+            }
+
+            
+            
         }
+    }
+
+
+    // ssize_t num_leidos;
+    // ssize_t offset = 0; //Controlar los saltos de línea y guardar la siguiente instrucción si se evalua en la iteración anterior
+    
+    // char *resto;
+
+    // //Si de una pasada leemos una instrucción, salto de línea y parte de la siguiente instrucción, esa segunda parte se guarda en el offset
+    // //La segunda condición sirve para que si de una pasada leemos la línea completa pero incluye varias instrucciones, también se traten 
+    // while((num_leidos = read(STDIN_FILENO, buffer + offset, buf_size - offset)) > 0 || offset != 0)
+    // {
+    //     if(num_leidos == -1)
+    //     {
+    //         perror("read()");
+    //         exit(EXIT_FAILURE);
+    //     }
         
-        //Para llevar un control y saber donde está el offset
-        buffer[offset + num_leidos] = '\0'; //preguntar si eso esta bien
+    //     //Para llevar un control y saber donde está el offset
+    //     buffer[offset + num_leidos] = '\0'; //preguntar si eso esta bien
 
-        //Trozeamos la entrada para obtener la primera instrucción el resto, que se encontrará después del salto de línea \n
-        char *linea = strtok_r(buffer, "\n", &resto);
-        //char *resto = strtok(NULL, "");
+    //     //Trozeamos la entrada para obtener la primera instrucción el resto, que se encontrará después del salto de línea \n
+    //     char *linea = strtok_r(buffer, "\n", &resto);
+    //     //char *resto = strtok(NULL, "");
 
-        printf("Numero de bytes leidos: %ld\n", num_leidos);
-        printf("Buffer: %s\n", buffer);
+    //     printf("Numero de bytes leidos: %ld\n", num_leidos);
+    //     printf("Buffer: %s\n", buffer);
 
-        //Poner el while o no, genera la misma salida por el print
-        while (linea != NULL) 
-        {
-            printf("Linea: %s\n", linea);   
-            linea = strtok_r(NULL, "\n", &resto); 
-        }
-        //printf("Linea: %s\n", linea);
+    //     //Poner el while o no, genera la misma salida por el print
+    //     while (linea != NULL) 
+    //     {
+    //         printf("Linea: %s\n", linea);   
+    //         linea = strtok_r(NULL, "\n", &resto); 
+    //     }
+    //     //printf("Linea: %s\n", linea);
 
-        //Comprobamos si hemos leido algo más a partir del \n
-        //En caso afirmativo guardamos la longitud en el offset y lo movemos al principio del buffer
-        //En caso contrario no guardamos nada
-        if(resto != NULL)
-        {
-            offset = strlen(resto);
-            memmove(buffer, resto, offset);
-        }
-        else
-            offset = 0;
+    //     //Comprobamos si hemos leido algo más a partir del \n
+    //     //En caso afirmativo guardamos la longitud en el offset y lo movemos al principio del buffer
+    //     //En caso contrario no guardamos nada
+    //     if(resto != NULL)
+    //     {
+    //         offset = strlen(resto);
+    //         memmove(buffer, resto, offset);
+    //     }
+    //     else
+    //         offset = 0;
         
         
 
-        printf("Resto: %s\n", resto);
+    //     printf("Resto: %s\n", resto);
 
 
         
-    } 
+    // } 
     
     free(buffer);
     exit(EXIT_SUCCESS);
