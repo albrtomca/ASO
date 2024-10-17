@@ -21,17 +21,62 @@
 
 typedef enum {NADA, REDIR_IZQ, REDIR_DCHA, REDIR2, TUBERIA} operador_enum;
 
-void redireccion_doble(char *lado_izq,char *lado_dcho)
-{
-
-}
 
 void redireccion_izq(char *lado_izq,char *lado_dcho)
 {
+    int fd; //Descriptor de fichero
+    switch(fork())
+    {
+        case -1: //error
+            perror("fork()");
+            exit(EXIT_FAILURE);
+            break;
+        case 0: //ejecucion proceso hijo
+            if(close(STDIN_FILENO) == -1)
+            {
+                perror("close(STDOUT_FILENO)");
+                exit(EXIT_FAILURE);
+            }
+            
+            if((fd = open(lado_dcho, O_RDONLY | O_CREAT, S_IRWXU)) == -1)
+            {
+                perror("open(fd_entrada)");
+                exit(EXIT_FAILURE);
+            }
+            
+            
+            //char *cadena[] = lado_izq;
+            char *ptrToken;
+            char *saveptr;
+            char **argum;
+
+            if((argum = malloc(strlen(lado_izq) * sizeof(char))) == NULL)
+            {
+                perror("malloc(argum)");
+                exit(EXIT_FAILURE);
+            }
     
+            int i = 0;
+
+            ptrToken = strtok_r(lado_izq, " ", &saveptr);
+            while ( ptrToken != NULL ) {
+                //printf( "%s\n", ptrToken );
+                argum[i] = ptrToken;
+                i++;
+                ptrToken = strtok_r( NULL, " ", &saveptr );
+            }
+
+            argum[i] = NULL;
+
+            execvp(argum[0],argum);
+            perror("exec()");
+            free(argum);
+            exit(EXIT_FAILURE);
+            break;
+    }
 }
 
-void redireccion_dcha(char *lado_izq,char *lado_dcho)
+void redireccion_dcha_o_doble(char *lado_izq,char *lado_dcho, bool doble)
 {
     int fd; //Descriptor de fichero
     switch(fork())
@@ -46,15 +91,48 @@ void redireccion_dcha(char *lado_izq,char *lado_dcho)
                 perror("close(STDOUT_FILENO)");
                 exit(EXIT_FAILURE);
             }
-            
-            if((fd = open(lado_dcho, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU)) == -1)
+            if(doble)
             {
-                perror("open(fd)");
-                exit(EXIT_FAILURE);
+                if((fd = open(lado_dcho, O_WRONLY | O_CREAT | O_APPEND, S_IRWXU)) == -1)
+                {
+                    perror("open(fd_doble)");
+                    exit(EXIT_FAILURE);
+                }
+                
+            } else {
+                if((fd = open(lado_dcho, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU)) == -1)
+                {
+                    perror("open(fd_simple)");
+                    exit(EXIT_FAILURE);
+                }
             }
             
-            
-            
+            //char *cadena[] = lado_izq;
+            char *ptrToken;
+            char *saveptr;
+            char **argum;
+
+            if((argum = malloc(strlen(lado_izq) * sizeof(char))) == NULL)
+            {
+                perror("malloc(argum)");
+                exit(EXIT_FAILURE);
+            }
+    
+            int i = 0;
+
+            ptrToken = strtok_r(lado_izq, " ", &saveptr);
+            while ( ptrToken != NULL ) {
+                //printf( "%s\n", ptrToken );
+                argum[i] = ptrToken;
+                i++;
+                ptrToken = strtok_r( NULL, " ", &saveptr );
+            }
+
+            argum[i] = NULL;
+
+            execvp(argum[0],argum);
+            perror("exec()");
+            free(argum);
             exit(EXIT_FAILURE);
             break;
 
@@ -76,18 +154,21 @@ void tuberia(char *lado_izq,char *lado_dcho)
 
 void procesar_linea(char *linea)
 {
-    printf("line:%s\n",linea);
+    //printf("line:%s\n",linea);
     char *lado_izq, *operador, *lado_dcho = NULL;
     operador_enum enum_op = NADA;
+    bool doble;
 
     if(strstr(linea,">>") != NULL)
     {
         operador = ">>";
+        doble = true;
         enum_op = REDIR2;
     }
      else if(strchr(linea,'>') != NULL) 
     {
         operador = ">";
+        doble = false;
         enum_op = REDIR_DCHA;
     }
      else if(strchr(linea,'<') != NULL) 
@@ -104,18 +185,21 @@ void procesar_linea(char *linea)
     if(operador != NULL)
     {
         lado_izq = strtok(linea,operador);
+        //printf("Lado izq:%s\n",lado_izq);
         lado_dcho = strtok(NULL,operador);
+        lado_dcho = strtok(lado_dcho," ");
+        //printf("Lado dcho:%s\n", lado_dcho);
     }
 
-    printf("Lado izq: %s\n", lado_izq);
+    //printf("Lado izq: %s\n", lado_izq);
 
     switch(enum_op)
     {
         case REDIR2:
-            redireccion_doble(lado_izq,lado_dcho);
+            redireccion_dcha_o_doble(lado_izq,lado_dcho, doble);
             break;
         case REDIR_DCHA:
-            redireccion_dcha(lado_izq,lado_dcho);
+            redireccion_dcha_o_doble(lado_izq, lado_dcho, doble);
             break;
         case REDIR_IZQ:
             redireccion_izq(lado_izq,lado_dcho);
@@ -124,7 +208,33 @@ void procesar_linea(char *linea)
             tuberia(lado_izq,lado_dcho);
             break;
         default:
-            printf("sin operador\n");
+            //printf("sin operador\n");
+            char *ptrToken;
+            char *saveptr;
+            char **argum;
+
+            if((argum = malloc(strlen(lado_izq) * sizeof(char))) == NULL)
+            {
+                perror("malloc(argum)");
+                exit(EXIT_FAILURE);
+            }
+    
+            int i = 0;
+
+            ptrToken = strtok_r(lado_izq, " ", &saveptr);
+            while ( ptrToken != NULL ) {
+                //printf( "%s\n", ptrToken );
+                argum[i] = ptrToken;
+                i++;
+                ptrToken = strtok_r( NULL, " ", &saveptr );
+            }
+
+            argum[i] = NULL;
+            
+            execvp(argum[0],argum);
+            perror("exec()");
+            free(argum);
+            exit(EXIT_FAILURE);
             break;
     }
 
