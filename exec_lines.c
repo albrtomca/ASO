@@ -46,21 +46,15 @@ void redireccion_dcha(char *lado_izq,char *lado_dcho)
                 perror("close(STDOUT_FILENO)");
                 exit(EXIT_FAILURE);
             }
+            
             if((fd = open(lado_dcho, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU)) == -1)
             {
                 perror("open(fd)");
                 exit(EXIT_FAILURE);
             }
             
-            char *arg[] = {lado_izq, NULL};
             
-            for (int i = 0; arg[i] != NULL; i++) {
-                printf("arg[%d]: %s\n", i, arg[i]);
-            }
             
-            char *comando = strtok(lado_izq, " ");
-            execvp(comando, arg);
-            perror("exec()");
             exit(EXIT_FAILURE);
             break;
 
@@ -82,6 +76,7 @@ void tuberia(char *lado_izq,char *lado_dcho)
 
 void procesar_linea(char *linea)
 {
+    printf("line:%s\n",linea);
     char *lado_izq, *operador, *lado_dcho = NULL;
     operador_enum enum_op = NADA;
 
@@ -111,6 +106,8 @@ void procesar_linea(char *linea)
         lado_izq = strtok(linea,operador);
         lado_dcho = strtok(NULL,operador);
     }
+
+    printf("Lado izq: %s\n", lado_izq);
 
     switch(enum_op)
     {
@@ -199,6 +196,7 @@ int main(int argc, char **argv)
     int indice_linea = 0;
     int num_linea_error = 1;
     bool controlador_error = false;
+    char *resto;
 
     //Leemos de la entrada estandar 
     while((num_leidos = read(STDIN_FILENO, buffer, buf_size)) > 0)
@@ -212,7 +210,7 @@ int main(int argc, char **argv)
                 //De ser así, imprimimos un mensaje de error y hacemos tratamiento de datos
                 fprintf(stderr, "Error, línea %d demasiado larga: %s \n", num_linea_error, linea);
                 num_linea_error++;
-                memset(linea, 0, max_line_size);
+                //memset(linea, 0, max_line_size);
                 indice_linea = 0;
                 controlador_error = true;
             }
@@ -222,7 +220,9 @@ int main(int argc, char **argv)
             linea[indice_linea] = buffer[i];
             if(buffer[i] == '\n')
             {
-                //printf("Contenido Antes de ejecucion: %s\n", linea);
+                char *lineaBuf = strtok(linea, "\n");
+                char *restoBuf = strtok(NULL, "");
+                //printf("Contenido Antes de ejecucion: %s\n", lineaBuf);
                 
                 //Aqui se trata el resto de la linea cuando ha pasado por el condicionante de error
                 if(controlador_error == true)
@@ -230,12 +230,12 @@ int main(int argc, char **argv)
                     controlador_error = false;
                 }
                  else {//Si no ha pasado por el error, ejecutamos la linea
-                    procesar_linea(linea);
+                    procesar_linea(lineaBuf);
                     num_linea_error++;
                 }
                 //Reseteamos valores
                 indice_linea = 0;
-                memset(linea, 0, max_line_size);
+                //memset(linea, 0, max_line_size);
             }
             else {
                 indice_linea++;
