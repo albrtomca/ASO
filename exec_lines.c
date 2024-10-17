@@ -356,59 +356,6 @@ int main(int argc, char **argv)
         }
     }
 
-
-    // ssize_t num_leidos;
-    // ssize_t offset = 0; //Controlar los saltos de línea y guardar la siguiente instrucción si se evalua en la iteración anterior
-    
-    // char *resto;
-
-    // //Si de una pasada leemos una instrucción, salto de línea y parte de la siguiente instrucción, esa segunda parte se guarda en el offset
-    // //La segunda condición sirve para que si de una pasada leemos la línea completa pero incluye varias instrucciones, también se traten 
-    // while((num_leidos = read(STDIN_FILENO, buffer + offset, buf_size - offset)) > 0 || offset != 0)
-    // {
-    //     if(num_leidos == -1)
-    //     {
-    //         perror("read()");
-    //         exit(EXIT_FAILURE);
-    //     }
-        
-    //     //Para llevar un control y saber donde está el offset
-    //     buffer[offset + num_leidos] = '\0'; //preguntar si eso esta bien
-
-    //     //Trozeamos la entrada para obtener la primera instrucción el resto, que se encontrará después del salto de línea \n
-    //     char *linea = strtok_r(buffer, "\n", &resto);
-    //     //char *resto = strtok(NULL, "");
-
-    //     printf("Numero de bytes leidos: %ld\n", num_leidos);
-    //     printf("Buffer: %s\n", buffer);
-
-    //     //Poner el while o no, genera la misma salida por el print
-    //     while (linea != NULL) 
-    //     {
-    //         printf("Linea: %s\n", linea);   
-    //         linea = strtok_r(NULL, "\n", &resto); 
-    //     }
-    //     //printf("Linea: %s\n", linea);
-
-    //     //Comprobamos si hemos leido algo más a partir del \n
-    //     //En caso afirmativo guardamos la longitud en el offset y lo movemos al principio del buffer
-    //     //En caso contrario no guardamos nada
-    //     if(resto != NULL)
-    //     {
-    //         offset = strlen(resto);
-    //         memmove(buffer, resto, offset);
-    //     }
-    //     else
-    //         offset = 0;
-        
-        
-
-    //     printf("Resto: %s\n", resto);
-
-
-        
-    // } 
-    
     free(buffer);
     free(linea);
     exit(EXIT_SUCCESS);
