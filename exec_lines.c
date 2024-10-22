@@ -52,6 +52,13 @@ void ejecutar_comando_sin_operador(char *comando)
 
     argum[i] = NULL;
 
+    // for(int j = 0; j < i+1; j++)
+    // {
+    //     printf("Argumento:%s\n", argum[j]);
+    // }
+
+    
+
     execvp(argum[0], argum);
     perror("exec()");
     free(argum);
@@ -82,6 +89,14 @@ void redireccion_izq(char *lado_izq, char *lado_dcho)
 
         ejecutar_comando_sin_operador(lado_izq);
 
+        break;
+
+    default: // ejecucion proceso padre (espera al hijo)
+        if (wait(NULL) == -1)
+        {
+            perror("wait()");
+            exit(EXIT_FAILURE);
+        }
         break;
     }
 }
@@ -148,7 +163,7 @@ void tuberia(char *lado_izq, char *lado_dcho)
         perror("fork()");
         exit(EXIT_FAILURE);
         break;
-    case 0: // hijo izquierdo
+    case 0:                          // hijo izquierdo
         if (close(pipefds[0]) == -1) // cerramos el descriptor de lectura
         {
             perror("close()");
@@ -180,7 +195,7 @@ void tuberia(char *lado_izq, char *lado_dcho)
         perror("fork()");
         exit(EXIT_FAILURE);
         break;
-    case 0: // hijo derecho
+    case 0:                          // hijo derecho
         if (close(pipefds[1]) == -1) // cerramos el extremo de escritura
         {
             perror("close()");
@@ -202,7 +217,28 @@ void tuberia(char *lado_izq, char *lado_dcho)
         ejecutar_comando_sin_operador(lado_dcho);
 
         break;
-    default: 
+    default:
+        break;
+    }
+}
+
+void sin_operadores(char *lado_izq)
+{
+    switch (fork())
+    {
+    case -1: // error
+        perror("fork()");
+        exit(EXIT_FAILURE);
+        break;
+    case 0: // ejecucion proceso hijo
+        ejecutar_comando_sin_operador(lado_izq);
+        break;
+    default:
+        if (wait(NULL) == -1)
+        {
+            perror("wait()");
+            exit(EXIT_FAILURE);
+        }
         break;
     }
 }
@@ -242,8 +278,10 @@ void procesar_linea(char *linea)
     if (operador != NULL && enum_op != TUBERIA)
     {
         lado_izq = strtok(linea, operador);
+        //("Lado izq: %s\n", lado_izq);
         lado_dcho = strtok(NULL, operador);
         lado_dcho = strtok(lado_dcho, " ");
+        // printf("Lado dcho: %s\n", lado_dcho);
     }
 
     switch (enum_op)
@@ -261,7 +299,7 @@ void procesar_linea(char *linea)
         tuberia(lado_izq, lado_dcho);
         break;
     default:
-        ejecutar_comando_sin_operador(lado_izq);
+        sin_operadores(lado_izq);
         break;
     }
 }
@@ -309,11 +347,13 @@ int main(int argc, char **argv)
     if (buf_size < BUF_MIN || buf_size > BUF_MAX)
     {
         fprintf(stderr, "Error: El tamaño de buffer tiene que estar entre 1 y 8192.\n");
+        exit(EXIT_FAILURE);
     }
 
     if (max_line_size < LINE_MIN || max_line_size > LINE_MAX)
     {
         fprintf(stderr, "Error: El tamaño de línea tiene que estar entre 16 y 1024.\n");
+        exit(EXIT_FAILURE);
     }
 
     // Guardamos memoria para el buffer
@@ -332,7 +372,7 @@ int main(int argc, char **argv)
     ssize_t num_leidos;
     int indice_linea = 0;
     int num_linea_error = 1;
-    bool controlador_error = false;
+    bool controlador_error, hay_error = false;
     char *resto;
 
     // Leemos de la entrada estandar
@@ -345,10 +385,11 @@ int main(int argc, char **argv)
             if (indice_linea == max_line_size)
             {
                 // De ser así, imprimimos un mensaje de error y hacemos tratamiento de datos
-                fprintf(stderr, "Error, línea %d demasiado larga: %s \n", num_linea_error, linea);
+                fprintf(stderr, "Error, línea %d demasiado larga: \"%s...\" \n", num_linea_error, linea);
                 num_linea_error++;
                 indice_linea = 0;
                 controlador_error = true;
+                hay_error = true;        
             }
 
             // Si no ha alcanzado el límite, añadimos el dato leido a un buffer de datos leidos
@@ -356,7 +397,9 @@ int main(int argc, char **argv)
             if (buffer[i] == '\n')
             {
                 char *lineaBuf = strtok(linea, "\n");
+               // printf("Linea buf:%s\n", lineaBuf);
                 char *restoBuf = strtok(NULL, "");
+               // printf("Resto:%s\n", restoBuf);
 
                 // Aqui se trata el resto de la linea cuando ha pasado por el condicionante de error
                 if (controlador_error == true)
@@ -380,5 +423,11 @@ int main(int argc, char **argv)
 
     free(buffer);
     free(linea);
-    exit(EXIT_SUCCESS);
+    if(hay_error)
+    {
+        exit(EXIT_FAILURE);
+    } else {
+        exit(EXIT_SUCCESS);
+    }
+
 }
