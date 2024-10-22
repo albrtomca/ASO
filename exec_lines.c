@@ -195,7 +195,7 @@ void tuberia(char *lado_izq, char *lado_dcho)
 
         if (close(pipefds[0]) == -1) // cerramos el duplicado
         {
-            perror("close(4)");
+            perror("close()");
             exit(EXIT_FAILURE);
         }
 
@@ -235,16 +235,16 @@ void procesar_linea(char *linea)
     {
         operador = "|";
         enum_op = TUBERIA;
+        lado_izq = strtok(linea, operador);
+        lado_dcho = strtok(NULL, operador);
     }
 
-    if (operador != NULL)
+    if (operador != NULL && enum_op != TUBERIA)
     {
         lado_izq = strtok(linea, operador);
         lado_dcho = strtok(NULL, operador);
         lado_dcho = strtok(lado_dcho, " ");
     }
-
-    // printf("Lado izq: %s\n", lado_izq);
 
     switch (enum_op)
     {
@@ -347,19 +347,16 @@ int main(int argc, char **argv)
                 // De ser así, imprimimos un mensaje de error y hacemos tratamiento de datos
                 fprintf(stderr, "Error, línea %d demasiado larga: %s \n", num_linea_error, linea);
                 num_linea_error++;
-                // memset(linea, 0, max_line_size);
                 indice_linea = 0;
                 controlador_error = true;
             }
 
             // Si no ha alcanzado el límite, añadimos el dato leido a un buffer de datos leidos
-            // printf("Contenido del buffer de linea: %s\n", linea);
             linea[indice_linea] = buffer[i];
             if (buffer[i] == '\n')
             {
                 char *lineaBuf = strtok(linea, "\n");
                 char *restoBuf = strtok(NULL, "");
-                // printf("Contenido Antes de ejecucion: %s\n", lineaBuf);
 
                 // Aqui se trata el resto de la linea cuando ha pasado por el condicionante de error
                 if (controlador_error == true)
@@ -373,7 +370,6 @@ int main(int argc, char **argv)
                 }
                 // Reseteamos valores
                 indice_linea = 0;
-                // memset(linea, 0, max_line_size);
             }
             else
             {
