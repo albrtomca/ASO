@@ -29,7 +29,8 @@ typedef enum
     TUBERIA
 } operador_enum;
 
-void analisis_errores_hijo(pid_t pid)
+
+void analisis_errores_hijo(pid_t pid, int num_linea)
 {
     int status;
 
@@ -44,13 +45,13 @@ void analisis_errores_hijo(pid_t pid)
         int codigo_salida = WEXITSTATUS(status);
         if (codigo_salida != 0)
         {
-            fprintf(stderr, "Error al ejecutar la línea. Terminación normal con el código %d.\n", codigo_salida);
+            fprintf(stderr, "Error al ejecutar la línea %d. Terminación normal con el código %d.\n", num_linea, codigo_salida);
             exit(WEXITSTATUS(status));
         }
     }
     else if (WIFSIGNALED(status))
     {
-        fprintf(stderr, "Error al ejecutar la línea. Terminación anormal por señal %d.\n", WTERMSIG(status));
+        fprintf(stderr, "Error al ejecutar la línea %d. Terminación anormal por señal %d.\n", num_linea, WTERMSIG(status));
         exit(WTERMSIG(status));
     }
 }
@@ -80,6 +81,7 @@ void ejecutar_comando_sin_operador(char *comando)
         exit(EXIT_FAILURE);
     }
 
+
     int i = 0;
 
     ptrToken = strtok_r(comando, " ", &saveptr);
@@ -98,7 +100,7 @@ void ejecutar_comando_sin_operador(char *comando)
     exit(EXIT_FAILURE);
 }
 
-void redireccion_izq(char *lado_izq, char *lado_dcho)
+void redireccion_izq(char *lado_izq, char *lado_dcho, int num_linea)
 {
     int status;
     pid_t pid;
@@ -128,12 +130,12 @@ void redireccion_izq(char *lado_izq, char *lado_dcho)
         break;
 
     default: 
-        analisis_errores_hijo(pid);
+        analisis_errores_hijo(pid, num_linea);
         break;
     }
 }
 
-void redireccion_dcha_o_doble(char *lado_izq, char *lado_dcho, bool doble)
+void redireccion_dcha_o_doble(char *lado_izq, char *lado_dcho, bool doble, int num_linea)
 {
     pid_t pid;
     int fd; // Descriptor de fichero
@@ -171,12 +173,12 @@ void redireccion_dcha_o_doble(char *lado_izq, char *lado_dcho, bool doble)
         break;
 
     default: // ejecucion proceso padre (espera al hijo)
-        analisis_errores_hijo(pid);
+        analisis_errores_hijo(pid, num_linea);
         break;
     }
 }
 
-void tuberia(char *lado_izq, char *lado_dcho)
+void tuberia(char *lado_izq, char *lado_dcho, int num_linea)
 {
     pid_t pid_izq;
     pid_t pid_dcho;
@@ -218,7 +220,7 @@ void tuberia(char *lado_izq, char *lado_dcho)
 
         break;
     default:
-        analisis_errores_hijo(pid_izq);
+        //analisis_errores_hijo(pid_izq, num_linea);
         break;
     }
 
@@ -248,15 +250,29 @@ void tuberia(char *lado_izq, char *lado_dcho)
         }
 
         ejecutar_comando_sin_operador(lado_dcho);
-
+        
         break;
     default:
-        analisis_errores_hijo(pid_dcho);
+        //analisis_errores_hijo(pid_dcho, num_linea);
         break;
     }
+
+    if (close(pipefds[0]) == -1)
+    {
+        perror("close(pipefds[0])");
+        exit(EXIT_FAILURE);
+    }
+    if (close(pipefds[1]) == -1)
+    {
+        perror("close(pipefds[1])");
+        exit(EXIT_FAILURE);
+    }
+    
+    analisis_errores_hijo(pid_izq, num_linea);
+    analisis_errores_hijo(pid_dcho, num_linea);
 }
 
-void sin_operadores(char *lado_izq)
+void sin_operadores(char *lado_izq, int num_linea)
 {
     pid_t pid;
     
@@ -270,12 +286,12 @@ void sin_operadores(char *lado_izq)
         ejecutar_comando_sin_operador(lado_izq);
         break;
     default:
-        analisis_errores_hijo(pid);
+        analisis_errores_hijo(pid, num_linea);
         break;
     }
 }
 
-void procesar_linea(char *linea)
+void procesar_linea(char *linea, int num_linea)
 {
     // printf("line:%s\n",linea);
     char *lado_izq, *operador, *lado_dcho = NULL;
@@ -319,19 +335,19 @@ void procesar_linea(char *linea)
     switch (enum_op)
     {
     case REDIR2:
-        redireccion_dcha_o_doble(lado_izq, lado_dcho, doble);
+        redireccion_dcha_o_doble(lado_izq, lado_dcho, doble, num_linea);
         break;
     case REDIR_DCHA:
-        redireccion_dcha_o_doble(lado_izq, lado_dcho, doble);
+        redireccion_dcha_o_doble(lado_izq, lado_dcho, doble, num_linea);
         break;
     case REDIR_IZQ:
-        redireccion_izq(lado_izq, lado_dcho);
+        redireccion_izq(lado_izq, lado_dcho, num_linea);
         break;
     case TUBERIA:
-        tuberia(lado_izq, lado_dcho);
+        tuberia(lado_izq, lado_dcho, num_linea);
         break;
     default:
-        sin_operadores(lado_izq);
+        sin_operadores(lado_izq, num_linea);
         break;
     }
 }
@@ -440,7 +456,7 @@ int main(int argc, char **argv)
                 }
                 else
                 { // Si no ha pasado por el error, ejecutamos la linea
-                    procesar_linea(lineaBuf);
+                    procesar_linea(lineaBuf, num_linea_error);
                     num_linea_error++;
                 }
                 // Reseteamos valores
