@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <stdbool.h>
+#include <errno.h>
 
 #define BUF_SIZE_DEF 16
 #define MAX_LINE_SIZE_DEF 32
@@ -28,15 +29,54 @@ typedef enum
     TUBERIA
 } operador_enum;
 
+void analisis_errores_hijo(pid_t pid)
+{
+    int status;
+
+    if (waitpid(pid, &status, 0) == -1)
+    {
+        perror("waitpid()");
+        exit(EXIT_FAILURE);
+    }
+
+    if (WIFEXITED(status))
+    {
+        int codigo_salida = WEXITSTATUS(status);
+        if (codigo_salida != 0)
+        {
+            fprintf(stderr, "Error al ejecutar la línea. Terminación normal con el código %d.\n", codigo_salida);
+            exit(WEXITSTATUS(status));
+        }
+    }
+    else if (WIFSIGNALED(status))
+    {
+        fprintf(stderr, "Error al ejecutar la línea. Terminación anormal por señal %d.\n", WTERMSIG(status));
+        exit(WTERMSIG(status));
+    }
+}
+
 void ejecutar_comando_sin_operador(char *comando)
 {
     char *ptrToken;
     char *saveptr;
     char **argum;
+    int fd;
 
     if ((argum = malloc(strlen(comando) * sizeof(char))) == NULL)
     {
         perror("malloc(argum)");
+        exit(EXIT_FAILURE);
+    }
+
+    if ((fd = open("/dev/null", O_WRONLY, S_IRWXU)) == -1)
+    {
+        perror("open(/dev/null)");
+        exit(EXIT_FAILURE);
+    }
+
+    if(dup2(fd, STDERR_FILENO) == -1)
+    {
+        perror("dup2(stderr)");
         exit(EXIT_FAILURE);
     }
 
@@ -52,13 +92,6 @@ void ejecutar_comando_sin_operador(char *comando)
 
     argum[i] = NULL;
 
-    // for(int j = 0; j < i+1; j++)
-    // {
-    //     printf("Argumento:%s\n", argum[j]);
-    // }
-
-    
-
     execvp(argum[0], argum);
     perror("exec()");
     free(argum);
@@ -67,8 +100,11 @@ void ejecutar_comando_sin_operador(char *comando)
 
 void redireccion_izq(char *lado_izq, char *lado_dcho)
 {
+    int status;
+    pid_t pid;
+
     int fd; // Descriptor de fichero
-    switch (fork())
+    switch (pid = fork())
     {
     case -1: // error
         perror("fork()");
@@ -91,20 +127,17 @@ void redireccion_izq(char *lado_izq, char *lado_dcho)
 
         break;
 
-    default: // ejecucion proceso padre (espera al hijo)
-        if (wait(NULL) == -1)
-        {
-            perror("wait()");
-            exit(EXIT_FAILURE);
-        }
+    default: 
+        analisis_errores_hijo(pid);
         break;
     }
 }
 
 void redireccion_dcha_o_doble(char *lado_izq, char *lado_dcho, bool doble)
 {
+    pid_t pid;
     int fd; // Descriptor de fichero
-    switch (fork())
+    switch (pid = fork())
     {
     case -1: // error
         perror("fork()");
@@ -138,17 +171,16 @@ void redireccion_dcha_o_doble(char *lado_izq, char *lado_dcho, bool doble)
         break;
 
     default: // ejecucion proceso padre (espera al hijo)
-        if (wait(NULL) == -1)
-        {
-            perror("wait()");
-            exit(EXIT_FAILURE);
-        }
+        analisis_errores_hijo(pid);
         break;
     }
 }
 
 void tuberia(char *lado_izq, char *lado_dcho)
 {
+    pid_t pid_izq;
+    pid_t pid_dcho;
+
     int pipefds[2];
 
     if (pipe(pipefds) == -1)
@@ -157,7 +189,7 @@ void tuberia(char *lado_izq, char *lado_dcho)
         exit(EXIT_FAILURE);
     }
 
-    switch (fork())
+    switch (pid_izq = fork())
     {
     case -1:
         perror("fork()");
@@ -186,10 +218,11 @@ void tuberia(char *lado_izq, char *lado_dcho)
 
         break;
     default:
+        analisis_errores_hijo(pid_izq);
         break;
     }
 
-    switch (fork())
+    switch (pid_dcho = fork())
     {
     case -1:
         perror("fork()");
@@ -218,13 +251,16 @@ void tuberia(char *lado_izq, char *lado_dcho)
 
         break;
     default:
+        analisis_errores_hijo(pid_dcho);
         break;
     }
 }
 
 void sin_operadores(char *lado_izq)
 {
-    switch (fork())
+    pid_t pid;
+    
+    switch (pid = fork())
     {
     case -1: // error
         perror("fork()");
@@ -234,11 +270,7 @@ void sin_operadores(char *lado_izq)
         ejecutar_comando_sin_operador(lado_izq);
         break;
     default:
-        if (wait(NULL) == -1)
-        {
-            perror("wait()");
-            exit(EXIT_FAILURE);
-        }
+        analisis_errores_hijo(pid);
         break;
     }
 }
@@ -372,7 +404,7 @@ int main(int argc, char **argv)
     ssize_t num_leidos;
     int indice_linea = 0;
     int num_linea_error = 1;
-    bool controlador_error, hay_error = false;
+    bool controlador_error = false;
     char *resto;
 
     // Leemos de la entrada estandar
@@ -389,7 +421,7 @@ int main(int argc, char **argv)
                 num_linea_error++;
                 indice_linea = 0;
                 controlador_error = true;
-                hay_error = true;        
+                exit(EXIT_FAILURE);
             }
 
             // Si no ha alcanzado el límite, añadimos el dato leido a un buffer de datos leidos
@@ -397,9 +429,9 @@ int main(int argc, char **argv)
             if (buffer[i] == '\n')
             {
                 char *lineaBuf = strtok(linea, "\n");
-               // printf("Linea buf:%s\n", lineaBuf);
+                // printf("Linea buf:%s\n", lineaBuf);
                 char *restoBuf = strtok(NULL, "");
-               // printf("Resto:%s\n", restoBuf);
+                // printf("Resto:%s\n", restoBuf);
 
                 // Aqui se trata el resto de la linea cuando ha pasado por el condicionante de error
                 if (controlador_error == true)
@@ -423,11 +455,5 @@ int main(int argc, char **argv)
 
     free(buffer);
     free(linea);
-    if(hay_error)
-    {
-        exit(EXIT_FAILURE);
-    } else {
-        exit(EXIT_SUCCESS);
-    }
-
+    exit(EXIT_SUCCESS);
 }
