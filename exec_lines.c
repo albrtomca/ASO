@@ -20,6 +20,7 @@
 #define LINE_MIN 16
 #define LINE_MAX 1024
 
+// Definimos un enumerado para los distintos operadores que puede tener un comando.
 typedef enum
 {
     NADA,
@@ -29,7 +30,7 @@ typedef enum
     TUBERIA
 } operador_enum;
 
-
+// En esta función hacemos el tratamiento de los errores que se pueden cometer en el momento de la ejecución de la linea
 void analisis_errores_hijo(pid_t pid, int num_linea)
 {
     int status;
@@ -42,20 +43,22 @@ void analisis_errores_hijo(pid_t pid, int num_linea)
 
     if (WIFEXITED(status))
     {
+        // Obtenemos el codigo del estado del hijo
         int codigo_salida = WEXITSTATUS(status);
-        if (codigo_salida != 0)
+        if (codigo_salida != 0) // En el caso de ser distinto de 0, significaría que ha fallado en la ejecución
         {
             fprintf(stderr, "Error al ejecutar la línea %d. Terminación normal con el código %d.\n", num_linea, codigo_salida);
             exit(WEXITSTATUS(status));
         }
     }
-    else if (WIFSIGNALED(status))
+    else if (WIFSIGNALED(status)) // Captura del error si es cometido por una interrupción de señal.
     {
         fprintf(stderr, "Error al ejecutar la línea %d. Terminación anormal por señal %d.\n", num_linea, WTERMSIG(status));
         exit(WTERMSIG(status));
     }
 }
 
+// Función para ejecutar el comando
 void ejecutar_comando_sin_operador(char *comando)
 {
     char *ptrToken;
@@ -63,27 +66,29 @@ void ejecutar_comando_sin_operador(char *comando)
     char **argum;
     int fd;
 
+    // Creamos un buffer para almacenar el comando
     if ((argum = malloc(strlen(comando) * sizeof(char))) == NULL)
     {
         perror("malloc(argum)");
         exit(EXIT_FAILURE);
     }
 
+    // Redirigimos la salida de error a /dev/null para que no salga por pantalla
     if ((fd = open("/dev/null", O_WRONLY, S_IRWXU)) == -1)
     {
         perror("open(/dev/null)");
         exit(EXIT_FAILURE);
     }
 
-    if(dup2(fd, STDERR_FILENO) == -1)
+    if (dup2(fd, STDERR_FILENO) == -1)
     {
         perror("dup2(stderr)");
         exit(EXIT_FAILURE);
     }
 
-
     int i = 0;
 
+    // Sacamos los argumentos del comando para poder ejecutarlos con execvp
     ptrToken = strtok_r(comando, " ", &saveptr);
     while (ptrToken != NULL)
     {
@@ -96,10 +101,11 @@ void ejecutar_comando_sin_operador(char *comando)
 
     execvp(argum[0], argum);
     perror("exec()");
-    free(argum);
+    free(argum); // Liberamos la memoria.
     exit(EXIT_FAILURE);
 }
 
+// Función de procesamiento de línea cuando el operador es la redirección a la izquierda (<).
 void redireccion_izq(char *lado_izq, char *lado_dcho, int num_linea)
 {
     int status;
@@ -126,15 +132,15 @@ void redireccion_izq(char *lado_izq, char *lado_dcho, int num_linea)
         }
 
         ejecutar_comando_sin_operador(lado_izq);
-
         break;
 
-    default: 
+    default:
         analisis_errores_hijo(pid, num_linea);
         break;
     }
 }
 
+// Función de procesamiento de línea cuando el operador es la redirección doble o simple a la derecha (>> o >).
 void redireccion_dcha_o_doble(char *lado_izq, char *lado_dcho, bool doble, int num_linea)
 {
     pid_t pid;
@@ -151,9 +157,10 @@ void redireccion_dcha_o_doble(char *lado_izq, char *lado_dcho, bool doble, int n
             perror("close(STDOUT_FILENO)");
             exit(EXIT_FAILURE);
         }
-        if (doble)
+        if (doble) // Parámetro que indica si la redirección es doble o no.
         {
-            if ((fd = open(lado_dcho, O_WRONLY | O_CREAT | O_APPEND, S_IRWXU)) == -1)
+            if ((fd = open(lado_dcho, O_WRONLY | O_CREAT | O_APPEND, S_IRWXU)) == -1) // La redirección doble usa O_APPEND para escribir al final del fichero
+
             {
                 perror("open(fd_doble)");
                 exit(EXIT_FAILURE);
@@ -161,7 +168,7 @@ void redireccion_dcha_o_doble(char *lado_izq, char *lado_dcho, bool doble, int n
         }
         else
         {
-            if ((fd = open(lado_dcho, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU)) == -1)
+            if ((fd = open(lado_dcho, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU)) == -1) // La redirección simple usa O_TRUNC para limpiar el fichero indicado
             {
                 perror("open(fd_simple)");
                 exit(EXIT_FAILURE);
@@ -169,15 +176,15 @@ void redireccion_dcha_o_doble(char *lado_izq, char *lado_dcho, bool doble, int n
         }
 
         ejecutar_comando_sin_operador(lado_izq);
-
         break;
 
-    default: // ejecucion proceso padre (espera al hijo)
+    default:
         analisis_errores_hijo(pid, num_linea);
         break;
     }
 }
 
+// Función de procesamiento de línea cuando el operador es una tubería (|).
 void tuberia(char *lado_izq, char *lado_dcho, int num_linea)
 {
     pid_t pid_izq;
@@ -193,7 +200,7 @@ void tuberia(char *lado_izq, char *lado_dcho, int num_linea)
 
     switch (pid_izq = fork())
     {
-    case -1:
+    case -1: // Caso de que fork() falle.
         perror("fork()");
         exit(EXIT_FAILURE);
         break;
@@ -217,16 +224,15 @@ void tuberia(char *lado_izq, char *lado_dcho, int num_linea)
         }
 
         ejecutar_comando_sin_operador(lado_izq);
-
         break;
+
     default:
-        //analisis_errores_hijo(pid_izq, num_linea);
         break;
     }
 
     switch (pid_dcho = fork())
     {
-    case -1:
+    case -1: // Caso de que fork() falle.
         perror("fork()");
         exit(EXIT_FAILURE);
         break;
@@ -250,13 +256,13 @@ void tuberia(char *lado_izq, char *lado_dcho, int num_linea)
         }
 
         ejecutar_comando_sin_operador(lado_dcho);
-        
         break;
+
     default:
-        //analisis_errores_hijo(pid_dcho, num_linea);
         break;
     }
 
+    // Cerramos extremos del padre
     if (close(pipefds[0]) == -1)
     {
         perror("close(pipefds[0])");
@@ -267,15 +273,17 @@ void tuberia(char *lado_izq, char *lado_dcho, int num_linea)
         perror("close(pipefds[1])");
         exit(EXIT_FAILURE);
     }
-    
+
+    // Analizamos por si falla alguno de los dos hijos para que señale el error.
     analisis_errores_hijo(pid_izq, num_linea);
     analisis_errores_hijo(pid_dcho, num_linea);
 }
 
+// Función de procesamiento de línea cuando no hay operadores.
 void sin_operadores(char *lado_izq, int num_linea)
 {
     pid_t pid;
-    
+
     switch (pid = fork())
     {
     case -1: // error
@@ -291,9 +299,9 @@ void sin_operadores(char *lado_izq, int num_linea)
     }
 }
 
+// Función que analiza el operador que se encuentra en la lína a ejecutar
 void procesar_linea(char *linea, int num_linea)
 {
-    // printf("line:%s\n",linea);
     char *lado_izq, *operador, *lado_dcho = NULL;
     operador_enum enum_op = NADA;
     bool doble;
@@ -319,19 +327,18 @@ void procesar_linea(char *linea, int num_linea)
     {
         operador = "|";
         enum_op = TUBERIA;
-        lado_izq = strtok(linea, operador);
+        lado_izq = strtok(linea, operador); // Separamos la parte izquierda de la tuberia de la parte derecha para su ejecución.
         lado_dcho = strtok(NULL, operador);
     }
 
     if (operador != NULL && enum_op != TUBERIA)
     {
-        lado_izq = strtok(linea, operador);
-        //("Lado izq: %s\n", lado_izq);
+        lado_izq = strtok(linea, operador); // Separamos la parte izquierda del operador de la parte derecha
         lado_dcho = strtok(NULL, operador);
-        lado_dcho = strtok(lado_dcho, " ");
-        // printf("Lado dcho: %s\n", lado_dcho);
+        lado_dcho = strtok(lado_dcho, " "); // Volvemos a separar la derecha ya que aparece un espacio al principio, que nos dificulta su posterior ejecución.
     }
 
+    // Tratamiento de casos en función del operador.
     switch (enum_op)
     {
     case REDIR2:
@@ -361,8 +368,7 @@ int main(int argc, char **argv)
     char *buffer;
     char *linea;
 
-    optind = 1;
-
+    // Captura de las variables por la entrada estandar para la ejecución del ./exec_lines
     while ((opt = getopt(argc, argv, "b:l:h")) != -1)
     {
         switch (opt)
@@ -392,12 +398,14 @@ int main(int argc, char **argv)
         }
     }
 
+    // Error si el tamaño del buffer pasado por entrada no se encuentra entre los valores predefinidos
     if (buf_size < BUF_MIN || buf_size > BUF_MAX)
     {
         fprintf(stderr, "Error: El tamaño de buffer tiene que estar entre 1 y 8192.\n");
         exit(EXIT_FAILURE);
     }
 
+    // Error si el tamaño de línea pasado por entrada no se encuentra entre los valores predefinidos
     if (max_line_size < LINE_MIN || max_line_size > LINE_MAX)
     {
         fprintf(stderr, "Error: El tamaño de línea tiene que estar entre 16 y 1024.\n");
@@ -410,7 +418,7 @@ int main(int argc, char **argv)
         perror("malloc(buffer)");
         exit(EXIT_FAILURE);
     }
-
+    // Guardamos memoria para el buffer de la linea que usaremos para ir guardando los datos que vayamos leyendo del buffer.
     if ((linea = (char *)malloc(max_line_size * sizeof(char))) == NULL)
     {
         perror("malloc(linea)");
@@ -419,9 +427,7 @@ int main(int argc, char **argv)
 
     ssize_t num_leidos;
     int indice_linea = 0;
-    int num_linea_error = 1;
-    bool controlador_error = false;
-    char *resto;
+    int num_linea = 1;
 
     // Leemos de la entrada estandar
     while ((num_leidos = read(STDIN_FILENO, buffer, buf_size)) > 0)
@@ -433,10 +439,7 @@ int main(int argc, char **argv)
             if (indice_linea == max_line_size)
             {
                 // De ser así, imprimimos un mensaje de error y hacemos tratamiento de datos
-                fprintf(stderr, "Error, línea %d demasiado larga: \"%s...\" \n", num_linea_error, linea);
-                num_linea_error++;
-                indice_linea = 0;
-                controlador_error = true;
+                fprintf(stderr, "Error, línea %d demasiado larga: \"%s...\" \n", num_linea, linea);
                 exit(EXIT_FAILURE);
             }
 
@@ -445,21 +448,11 @@ int main(int argc, char **argv)
             if (buffer[i] == '\n')
             {
                 char *lineaBuf = strtok(linea, "\n");
-                // printf("Linea buf:%s\n", lineaBuf);
-                char *restoBuf = strtok(NULL, "");
-                // printf("Resto:%s\n", restoBuf);
 
-                // Aqui se trata el resto de la linea cuando ha pasado por el condicionante de error
-                if (controlador_error == true)
-                {
-                    controlador_error = false;
-                }
-                else
-                { // Si no ha pasado por el error, ejecutamos la linea
-                    procesar_linea(lineaBuf, num_linea_error);
-                    num_linea_error++;
-                }
-                // Reseteamos valores
+                procesar_linea(lineaBuf, num_linea);
+                num_linea++;
+
+                // Reseteamos el indice del buffer la linea.
                 indice_linea = 0;
             }
             else
@@ -469,6 +462,7 @@ int main(int argc, char **argv)
         }
     }
 
+    // Liberamos la memoria dinamica de ambos buffers
     free(buffer);
     free(linea);
     exit(EXIT_SUCCESS);
